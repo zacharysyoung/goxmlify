@@ -49,7 +49,19 @@ func TestHTMLToXML(t *testing.T) {
 	}{
 		{
 			html: `<link nonce>`,
-			xml:  `<link nonce=""></link>`,
+			xml:  htmlPre + `<link nonce=""></link>` + htmlMid + htmlPost,
+		},
+		{
+			html: `<a><b></a>`,
+			xml:  htmlPre + htmlMid + `<a><b></b></a>` + htmlPost,
+		},
+		{
+			html: `<a><c nonce></a>`,
+			xml:  htmlPre + htmlMid + `<a><c nonce=""></c></a>` + htmlPost,
+		},
+		{
+			html: `<a><b nonce></a>`,
+			xml:  htmlPre + htmlMid + `<a><b nonce=""></b></a>` + htmlPost,
 		},
 	} {
 		r := strings.NewReader(tc.html)
@@ -58,14 +70,8 @@ func TestHTMLToXML(t *testing.T) {
 
 		got := b.String()
 
-		for _, s := range []string{htmlPre, htmlMid, htmlPost} {
-			if !strings.Contains(got, s) {
-				t.Errorf("htmlToXML(`%s`)→%q does not contain %q", tc.html, got, s)
-			}
-		}
-
-		if !strings.Contains(got, tc.xml) {
-			t.Errorf("htmlToXML(`%s`)→%q does not contain %q", tc.html, got, tc.xml)
+		if got != tc.xml {
+			t.Errorf("htmlToXML(`%s`)\ngot  %s\nwant %s", tc.html, got, tc.xml)
 		}
 	}
 }
