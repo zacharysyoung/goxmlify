@@ -6,35 +6,6 @@ import (
 	"testing"
 )
 
-func TestHTMLToXML(t *testing.T) {
-	const (
-		htmlPre  = "<html><head>"
-		htmlPost = "</body></html>"
-	)
-	for _, tc := range []struct {
-		html, xml string
-	}{
-		{
-			html: `<link nonce>`,
-			xml:  `<link nonce=""></link>`,
-		},
-	} {
-		r := strings.NewReader(tc.html)
-		b := &bytes.Buffer{}
-		htmlToXML(r, b)
-
-		got := b.String()
-
-		if strings.Index(got, htmlPre) != 0 {
-			t.Errorf("htmlToXML(`%s`)\nstarts with %s\nwant       %s", tc.html, got[:10], htmlPre)
-		}
-
-		if !strings.Contains(got, tc.xml) {
-			t.Errorf("htmlToXML(`%s`)→%q does not contain %q", tc.html, got, tc.xml)
-		}
-	}
-}
-
 func TestDecodeBadXML(t *testing.T) {
 	for _, tc := range []struct {
 		xml, want string
@@ -62,6 +33,39 @@ func TestDecodeBadXML(t *testing.T) {
 
 		if got := b.String(); got != tc.want {
 			t.Errorf("decodeXML(%q)\ngot  %q\nwant %q", tc.xml, got, tc.want)
+		}
+	}
+}
+
+func TestHTMLToXML(t *testing.T) {
+	const (
+		htmlPre  = "<html><head>"
+		htmlMid  = "</head><body>"
+		htmlPost = "</body></html>"
+	)
+
+	for _, tc := range []struct {
+		html, xml string
+	}{
+		{
+			html: `<link nonce>`,
+			xml:  `<link nonce=""></link>`,
+		},
+	} {
+		r := strings.NewReader(tc.html)
+		b := &bytes.Buffer{}
+		htmlToXML(r, b)
+
+		got := b.String()
+
+		for _, s := range []string{htmlPre, htmlMid, htmlPost} {
+			if !strings.Contains(got, s) {
+				t.Errorf("htmlToXML(`%s`)→%q does not contain %q", tc.html, got, s)
+			}
+		}
+
+		if !strings.Contains(got, tc.xml) {
+			t.Errorf("htmlToXML(`%s`)→%q does not contain %q", tc.html, got, tc.xml)
 		}
 	}
 }
