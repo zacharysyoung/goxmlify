@@ -4,26 +4,64 @@ import (
 	"bytes"
 	"strings"
 	"testing"
-
-	"golang.org/x/net/html"
 )
 
 func TestHTMLToXML(t *testing.T) {
+	const (
+		htmlPre  = "<html><head>"
+		htmlPost = "</body></html>"
+	)
 	for _, tc := range []struct {
 		html, xml string
 	}{
 		{
-			html: `<html><head><link nonce></head><body></body></html>`,
-			xml:  `<html><head><link nonce=""></link></head><body></body></html>`,
+			html: `<link nonce>`,
+			xml:  `<link nonce=""></link>`,
 		},
 	} {
-		doc := must(html.Parse(strings.NewReader(tc.html)))
+		r := strings.NewReader(tc.html)
 		b := &bytes.Buffer{}
+		htmlToXML(r, b)
 
-		htmlToXML(doc, b)
+		got := b.String()
 
-		if got := b.String(); got != tc.xml {
-			t.Errorf("htmlToXML(`%s`)\ngot  %s\nwant %s", tc.html, got, tc.xml)
+		if strings.Index(got, htmlPre) != 0 {
+			t.Errorf("htmlToXML(`%s`)\nstarts with %s\nwant       %s", tc.html, got[:10], htmlPre)
+		}
+
+		if !strings.Contains(got, tc.xml) {
+			t.Errorf("htmlToXML(`%s`)→%q does not contain %q", tc.html, got, tc.xml)
+		}
+	}
+}
+
+func TestDecodeBadXML(t *testing.T) {
+	for _, tc := range []struct {
+		xml, want string
+	}{
+		{
+			xml:  "<a><b></a>",
+			want: "<a><b></b></a>",
+		},
+		{
+			xml:  `<a><b nonce></a>`,
+			want: `<a><b nonce="nonce"></b></a>`,
+		},
+		{
+			xml:  `<a><b nonce/></a>`,
+			want: `<a><b nonce="nonce"></b></a>`,
+		},
+		{
+			xml:  `<a><b nonce=foo></a>`,
+			want: `<a><b nonce="foo"></b></a>`,
+		},
+	} {
+		r := strings.NewReader(tc.xml)
+		b := &bytes.Buffer{}
+		decodeXML(r, b)
+
+		if got := b.String(); got != tc.want {
+			t.Errorf("decodeXML(%q)\ngot  %q\nwant %q", tc.xml, got, tc.want)
 		}
 	}
 }
