@@ -1,4 +1,4 @@
-module github.com/zacharysyoung/xmlify
+module github.com/zacharysyoung/goxmlify
 
 go 1.21.5
 
