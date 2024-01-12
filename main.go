@@ -18,19 +18,18 @@ func main() {
 	case 3:
 		in = must(os.Open(os.Args[2]))
 	default:
-		fmt.Fprintln(os.Stderr, "usage: xmlify xml|html [input.hmtl]")
+		fmt.Fprintln(os.Stderr, "usage: xmlify xml|html [input.html]")
 		os.Exit(1)
 	}
 
 	var f func(r io.Reader, w io.Writer)
-
 	switch os.Args[1] {
 	case "xml":
 		f = decodeXML
 	case "html":
 		f = htmlToXML
 	default:
-		fmt.Fprintln(os.Stderr, "usage: xmlify xml|html [input.hmtl]")
+		fmt.Fprintln(os.Stderr, "usage: xmlify xml|html [input.html]")
 		os.Exit(1)
 	}
 
