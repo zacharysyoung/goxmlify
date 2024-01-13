@@ -2,10 +2,12 @@ package main
 
 import (
 	"bufio"
+	"bytes"
 	"encoding/xml"
 	"fmt"
 	"io"
 	"os"
+	"strings"
 
 	"golang.org/x/net/html"
 )
@@ -14,7 +16,10 @@ func main() {
 	var in io.Reader
 	switch len(os.Args) {
 	case 2:
-		in = os.Stdin
+		buf := &bytes.Buffer{}
+		io.Copy(buf, os.Stdin)
+		s := strings.TrimSpace(buf.String()) // trim trailing linebreak, see "linereaks test"
+		in = strings.NewReader(s)
 	case 3:
 		in = must(os.Open(os.Args[2]))
 	default:
