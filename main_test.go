@@ -6,84 +6,99 @@ import (
 	"testing"
 )
 
-func TestDecodeBadXML(t *testing.T) {
-	for _, tc := range []struct {
-		xml, want string
+func Test(t *testing.T) {
+	testCases := []struct {
+		input           string
+		xml, xhtmlClean string
 	}{
 		{
-			xml:  "<a><b></a>",
-			want: "<a><b></b></a>",
+			input:      "<a><b></a>",
+			xml:        "<a><b></b></a>",
+			xhtmlClean: "<a><b></b></a>",
 		},
 		{
-			xml:  `<a><b nonce></a>`,
-			want: `<a><b nonce="nonce"></b></a>`,
+			input:      `<a><b nonce=foo></a>`,
+			xml:        `<a><b nonce="foo"></b></a>`,
+			xhtmlClean: `<a><b nonce="foo"></b></a>`,
 		},
 		{
-			xml:  `<a><b nonce/></a>`,
-			want: `<a><b nonce="nonce"></b></a>`,
+			input:      `<a><b nonce></a>`,
+			xml:        `<a><b nonce="nonce"></b></a>`, // xml fills in the attribs value w/attribs name
+			xhtmlClean: `<a><b nonce=""></b></a>`,      // xhtml leaves it blanks
 		},
 		{
-			xml:  `<a><b nonce=foo></a>`,
-			want: `<a><b nonce="foo"></b></a>`,
+			input:      "<a><b>foo</a>",
+			xml:        "<a><b>foo</b></a>",
+			xhtmlClean: "<a><b>foo</b></a>",
 		},
-	} {
-		r := strings.NewReader(tc.xml)
-		b := &bytes.Buffer{}
-		decodeXML(r, b)
+		// -- Line break oddities
+		//    linebreak in the middle is OK
+		{
+			input:      "<a><b>\n</a>",
+			xml:        "<a><b>\n</b></a>",
+			xhtmlClean: "<a><b>\n</b></a>",
+		},
+		//    trailing linebreaks alters output of XHTML
+		{
+			input:      "<a><b></a>\n",
+			xml:        "<a><b></b></a>\n",
+			xhtmlClean: "<a><b></b></a><b>\n</b>",
+		},
+	}
 
-		if got := b.String(); got != tc.want {
-			t.Errorf("decodeXML(%q)\ngot  %q\nwant %q", tc.xml, got, tc.want)
-		}
+	for _, tc := range testCases {
+		t.Run("xml", func(t *testing.T) {
+			r := strings.NewReader(tc.input)
+			b := &bytes.Buffer{}
+			decodeXML(r, b)
+			got := b.String()
+			if got != tc.xml {
+				t.Errorf("decodeXML(%s)\n got %s\nwant %s", tc.input, got, tc.xml)
+			}
+		})
+		t.Run("xhtmlClean", func(t *testing.T) {
+			r := strings.NewReader(tc.input)
+			b := &bytes.Buffer{}
+			htmlToXML(r, b, true)
+			got := b.String()
+			if got != tc.xhtmlClean {
+				t.Errorf("htmlToXML(%s, true)\n got %s\nwant %s", tc.input, got, tc.xhtmlClean)
+			}
+		})
 	}
 }
 
-// Weird command-line behavior cannot replicate in a test, yet:
-//
-//	echo '<a><b nonce></a>' | goxmlify html
-//
-// yields:
-//
-//	<html><head></head><body><a><b nonce=""></b></a><b nonce="">
-//	</b></body></html>
-//
-// with extra <b nonce="">\n</b>
-// ??
-func TestHTMLToXML(t *testing.T) {
-	const (
-		htmlPre  = "<html><head>"
-		htmlMid  = "</head><body>"
-		htmlPost = "</body></html>"
-	)
-
-	for _, tc := range []struct {
-		html, xml string
+func TestXHTML(t *testing.T) {
+	testCases := []struct {
+		input             string
+		xhtmlClean, xhtml string
 	}{
+		// link must appear inside <head> for HTML
 		{
-			html: `<link nonce>`,
-			xml:  htmlPre + `<link nonce=""></link>` + htmlMid + htmlPost,
+			input:      `<link nonce>`,
+			xhtmlClean: `<link nonce=""></link>`,
+			xhtml:      `<html><head><link nonce=""></link></head><body></body></html>`,
 		},
-		{
-			html: `<a><b></a>`,
-			xml:  htmlPre + htmlMid + `<a><b></b></a>` + htmlPost,
-		},
-		{
-			html: `<a><b nonce></a>`,
-			xml:  htmlPre + htmlMid + `<a><b nonce=""></b></a>` + htmlPost,
-		},
-		// linebreaks drastically alter effect of HTML parser/renderer
-		{
-			html: "<a><b nonce></a>\n",
-			xml:  htmlPre + htmlMid + "<a><b nonce=\"\"></b></a><b nonce=\"\">\n</b>" + htmlPost,
-		},
-	} {
-		r := strings.NewReader(tc.html)
-		b := &bytes.Buffer{}
-		htmlToXML(r, b)
+	}
 
-		got := b.String()
-
-		if got != tc.xml {
-			t.Errorf("htmlToXML(`%s`)\ngot  %q\nwant %q", tc.html, got, tc.xml)
-		}
+	for _, tc := range testCases {
+		t.Run("xhtml", func(t *testing.T) {
+			r := strings.NewReader(tc.input)
+			b := &bytes.Buffer{}
+			htmlToXML(r, b, false)
+			got := b.String()
+			if got != tc.xhtml {
+				t.Errorf("htmlToXML(%s, false)\n got %s\nwant %s", tc.input, got, tc.xhtml)
+			}
+		})
+		t.Run("xhtmlClean", func(t *testing.T) {
+			r := strings.NewReader(tc.input)
+			b := &bytes.Buffer{}
+			htmlToXML(r, b, true)
+			got := b.String()
+			if got != tc.xhtmlClean {
+				t.Errorf("htmlToXML(%s, false)\n got %s\nwant %s", tc.input, got, tc.xhtmlClean)
+			}
+		})
 	}
 }

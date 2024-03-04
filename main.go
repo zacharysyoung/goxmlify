@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"encoding/xml"
+	"flag"
 	"fmt"
 	"io"
 	"os"
@@ -12,33 +13,44 @@ import (
 	"golang.org/x/net/html"
 )
 
+var (
+	method = flag.String("method", "", "process as xml, xhtml, or xhtml-clean; html-clean strips HTML <html>, <head>, and <body> tags.")
+)
+
 func main() {
+	usage := func() {
+		fmt.Fprintln(os.Stderr, "usage: xmlify -method=xml|xhtml|xhtml-clean [input.html]")
+		os.Exit(1)
+	}
+
+	flag.Parse()
+	if *method == "" {
+		usage()
+	}
+
 	var in io.Reader
-	switch len(os.Args) {
-	case 2:
+	switch args := flag.Args(); len(args) {
+	case 0:
 		buf := &bytes.Buffer{}
 		io.Copy(buf, os.Stdin)
 		s := strings.TrimSpace(buf.String()) // trim trailing linebreak, see "linereaks test"
 		in = strings.NewReader(s)
-	case 3:
-		in = must(os.Open(os.Args[2]))
+	case 1:
+		in = must(os.Open(args[0]))
 	default:
-		fmt.Fprintln(os.Stderr, "usage: xmlify xml|html [input.html]")
-		os.Exit(1)
+		usage()
 	}
 
-	var f func(r io.Reader, w io.Writer)
-	switch os.Args[1] {
+	switch *method {
 	case "xml":
-		f = decodeXML
-	case "html":
-		f = htmlToXML
+		decodeXML(in, os.Stdout)
+	case "xhtml":
+		htmlToXML(in, os.Stdout, false)
+	case "xhtml-clean":
+		htmlToXML(in, os.Stdout, true)
 	default:
-		fmt.Fprintln(os.Stderr, "usage: xmlify xml|html [input.html]")
-		os.Exit(1)
+		usage()
 	}
-
-	f(in, os.Stdout)
 }
 
 // decodeXML attemtps to decode XML from r and re-encode to w
@@ -66,8 +78,12 @@ func decodeXML(r io.Reader, w io.Writer) {
 // htmlToXML uses the html packages tokenizer to parse malformed
 // HTML (as XML), and then render back to HTML (XML)... except
 // it enforces some HTML properties that have nothing to do with
-// XML.
-func htmlToXML(r io.Reader, w io.Writer) {
+// XML. clean strips ancillary HTML <html> <head> and <body> tags.
+func htmlToXML(r io.Reader, w io.Writer, clean bool) {
+	skip := func(n *html.Node) bool {
+		return clean && (n.Data == "html" || n.Data == "head" || n.Data == "body")
+	}
+
 	doc := must(html.Parse(r))
 
 	bw := bufio.NewWriter(w)
@@ -78,9 +94,11 @@ func htmlToXML(r io.Reader, w io.Writer) {
 	f = func(n *html.Node) {
 		switch n.Type {
 		case html.ElementNode:
-			enc.EncodeToken(startElem(n))
+			if !skip(n) {
+				_must(enc.EncodeToken(startElem(n)))
+			}
 		case html.TextNode:
-			enc.EncodeToken(charData(n))
+			_must(enc.EncodeToken(charData(n)))
 		}
 
 		for c := n.FirstChild; c != nil; c = c.NextSibling {
@@ -88,7 +106,9 @@ func htmlToXML(r io.Reader, w io.Writer) {
 		}
 
 		if n.Type == html.ElementNode {
-			enc.EncodeToken(endElem(n))
+			if !skip(n) {
+				_must(enc.EncodeToken(endElem(n)))
+			}
 		}
 	}
 	f(doc)
